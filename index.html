@@ -115,6 +115,22 @@ const captions=document.querySelector('#caption'),speakerEl=document.querySelect
 const logEl=document.querySelector('#loglines');
 function log(s){logs.unshift(s);logs=logs.slice(0,4);logEl.innerHTML=logs.map(x=>'• '+x).join('<br>')}
 function caption(name,txt){speakerEl.textContent=name;wordsEl.textContent=txt;captions.classList.add('show');captionTimer=3.1}
+let aiReady=false, speechSeq=0;
+async function checkAI(){try{const r=await fetch('/api/health');const j=await r.json();aiReady=!!j.apiConfigured;document.querySelector('#status').textContent=aiReady?'● AI LIVE · 출연자 자율 대화':'● LIVE · AI 서버 준비 중';}catch(e){aiReady=false}}
+checkAI();
+async function askAI(a,b,act,fallback,seq,channelAtStart){
+ try{
+  const r=await fetch('/api/dialogue',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+   channel:channels[channelAtStart].name,program:channels[channelAtStart].sub,
+   actor:{name:a.name,role:a.role,goal:a.goal,mood:a.emotion,energy:a.energy},
+   partner:{name:b.name,role:b.role,mood:b.emotion},
+   action:act,recentMemory:a.memory.slice(-5),recentBroadcast:logs.slice(0,4)
+  })});
+  if(!r.ok)throw new Error('AI server '+r.status);
+  const data=await r.json();
+  if(data.dialogue&&seq===speechSeq&&channel===channelAtStart){caption(a.name,data.dialogue);log(a.name+'이 상황에 맞춰 새 대사를 생성했습니다.')}
+ }catch(e){if(seq===speechSeq&&channel===channelAtStart&&!aiReady){/* procedural fallback remains active */}}
+}
 function rand(a){return a[Math.floor(Math.random()*a.length)]}
 function clearSet(){while(set.children.length){let o=set.children[0];set.remove(o);o.traverse(n=>{if(n.geometry)n.geometry.dispose();if(n.material){if(Array.isArray(n.material))n.material.forEach(m=>m.dispose());else n.material.dispose()}})}actors=[];decor=[]}
 function makeActor(index,x,shirtColor,role){
@@ -195,7 +211,7 @@ function perform(a,act,b){
  if(act==='confront'){text=rand(['아니, 그건 좀 아니지.','왜 내 말은 안 듣는 건데?','잠깐, 그 얘기는 다르잖아.']);setEmotion(b,'당황',-.3);remember(b,a,'말다툼')}
  if(act==='quiet')text='음… 잠깐 생각 좀 해볼게.';
  if(act==='comment')text=rand(lineset);
- caption(a.name,text);lastSpeaker=a.id;log(a.name+' → '+b.name+'에게 '+({tease:'장난',challenge:'도전',joke:'농담',question:'질문',support:'공감',present:'상품 소개',confront:'반박',quiet:'잠시 침묵',comment:'이야기'}[act]||'이야기'));
+ caption(a.name,text);lastSpeaker=a.id;const seq=++speechSeq,channelAtStart=channel;if(aiReady)askAI(a,b,act,text,seq,channelAtStart);log(a.name+' → '+b.name+'에게 '+({tease:'장난',challenge:'도전',joke:'농담',question:'질문',support:'공감',present:'상품 소개',confront:'반박',quiet:'잠시 침묵',comment:'이야기'}[act]||'이야기'));
  a.mood=Math.max(-1,Math.min(1,a.mood+(act==='joke'?.12:act==='confront'?-.2:.04)));
 }
 function surprise(){
