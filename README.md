@@ -1,19 +1,22 @@
 # CHANNEL ZAP 3D
 
-A mobile-friendly browser-based 3D channel-zapping prototype with a Node.js dialogue backend.
+A mobile-friendly 3D channel-zapping game with a separate Node.js AI dialogue service.
 
-## Deploy on Render
+## Render services
 
-The Render Blueprint uses a Node web service to serve the game and the private AI API endpoint.
+- `channel-zap-3d`: static game website.
+- `channel-zap-3d-api`: Node.js dialogue API.
+
+The game calls the API at `https://channel-zap-3d-api.onrender.com`.
 
 ## Enable generated AI dialogue
 
-1. In the Render dashboard, open the `channel-zap-3d` web service.
-2. Open **Environment** and add `OPENAI_API_KEY` with an OpenAI API key.
-3. Save changes and redeploy, then reload the game page.
+1. Open the **channel-zap-3d-api** service in the Render dashboard.
+2. Open **Environment** and add `OPENAI_API_KEY`.
+3. Save and redeploy the API service, then reload the game website.
 
 Optional: set `OPENAI_MODEL` to change the model (default: `gpt-4.1-mini`).
 
-**Security:** Keep the API key only in Render's server-side Environment settings. Never put it in `index.html`, a public GitHub file, or a message. API usage may incur separate charges; account setup and billing should be handled by a parent or guardian.
+**Security:** Keep the API key only in Render's server-side Environment settings. Never put it in `index.html`, a public GitHub file, or a chat message. API usage may incur separate charges; a parent or guardian must handle any account setup and billing.
 
 Without the key, the game continues using its built-in prototype dialogue.
