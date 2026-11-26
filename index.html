@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>CHANNEL ZAP — Live Studio</title>
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#9eeaf5;font-family:system-ui,-apple-system,sans-serif;touch-action:manipulation}
+#view{width:100%;height:100%;display:block}
+#hud{position:fixed;left:12px;top:10px;z-index:5;color:#123f4c;text-shadow:0 1px 2px #fff;font-weight:800;pointer-events:none}
+#ch{font-size:14px}#genre{font-size:10px;letter-spacing:.12em}
+#status{position:fixed;left:12px;top:52px;z-index:5;color:#174957;background:#eaffffb8;border:1px solid #ffffff99;border-radius:10px;padding:6px 9px;font-size:10px;font-weight:700;pointer-events:none}
+#caption{position:fixed;left:50%;bottom:76px;transform:translateX(-50%);z-index:5;max-width:90%;min-width:45%;text-align:center;color:white;font-weight:950;font-size:clamp(17px,4vw,28px);line-height:1.2;text-shadow:2px 3px 0 #111, -1px -1px 0 #111,1px -1px 0 #111,-1px 1px 0 #111;background:#101827b8;border:2px solid #fff;padding:8px 15px;border-radius:9px;opacity:0;transition:opacity .18s;pointer-events:none}
+#caption.show{opacity:1}
+#speaker{color:#ffe46a;font-size:.65em;display:block;margin-bottom:3px}
+#panel{position:fixed;left:10px;right:10px;bottom:10px;z-index:7;display:flex;gap:7px;align-items:center;justify-content:center}
+button{border:1px solid #ffffff70;background:#172432e8;color:#fff;border-radius:11px;padding:10px 12px;font-weight:800;font-size:12px;box-shadow:0 3px 12px #0003}
+button:active{transform:scale(.96)}
+#log{position:fixed;top:88px;left:10px;width:min(220px,48vw);z-index:5;background:#eafaffd9;color:#173b46;border-radius:10px;padding:8px;font-size:10px;line-height:1.4;pointer-events:none}
+#log strong{font-size:10px}
+#loglines{margin-top:4px;max-height:90px;overflow:hidden}
+#tag{position:fixed;right:10px;top:10px;z-index:5;background:#15212dcc;color:white;padding:6px 9px;border-radius:8px;font-size:10px}
+#help{position:fixed;right:10px;bottom:65px;z-index:6;background:#eafaffed;color:#173b46;padding:8px 10px;border-radius:10px;font-size:10px;max-width:170px}
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+<div id="hud"><div id="ch">CH 01</div><div id="genre">LIVE VARIETY</div></div>
+<div id="status">● LIVE · 3명의 출연자가 방송 중</div>
+<div id="tag">CHANNEL ZAP / LIVE STUDIO</div>
+<div id="log"><strong>방송 상황</strong><div id="loglines">출연자들이 스튜디오에 입장했습니다.</div></div>
+<div id="caption"><span id="speaker"></span><span id="words"></span></div>
+<div id="help">출연자들은 계속 움직이고 서로 반응해. 화면을 탭하면 돌발 상황이 생겨.</div>
+<div id="panel">
+<button id="prev">◀ 이전 채널</button>
+<button id="event">돌발 상황</button>
+<button id="pause">Ⅱ 일시정지</button>
+<button id="next">다음 채널 ▶</button>
+</div>
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+const canvas=document.querySelector('#view');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:false});
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+const world=new THREE.Scene();world.background=new THREE.Color('#9eeaf5');
+const camera=new THREE.PerspectiveCamera(42,innerWidth/innerHeight,.1,100);
+camera.position.set(0,2.25,10.8);camera.lookAt(0,1.7,0);
+world.add(new THREE.HemisphereLight(0xffffff,0x7299a3,2.0));
+const sun=new THREE.DirectionalLight(0xffffff,2.6);sun.position.set(-4,8,7);sun.castShadow=true;world.add(sun);
+const bounce=new THREE.PointLight(0x9defff,25,18);bounce.position.set(4,4,3);world.add(bounce);
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(100,100),new THREE.MeshStandardMaterial({color:0x9eeaf5,roughness:.95}));floor.rotation.x=-Math.PI/2;floor.position.y=-.04;floor.receiveShadow=true;world.add(floor);
+
+const M=(c,r=.65,metal=0)=>new THREE.MeshStandardMaterial({color:c,roughness:r,metalness:metal});
+function mesh(g,m,p,x=0,y=0,z=0){let o=new THREE.Mesh(g,m);o.position.set(x,y,z);o.castShadow=true;o.receiveShadow=true;p.add(o);return o}
+function cube(p,w,h,d,c,x,y,z,r=.5){return mesh(new THREE.BoxGeometry(w,h,d),M(c,r),p,x,y,z)}
+const tv=new THREE.Group();tv.position.set(0,2.55,-1.4);world.add(tv);
+cube(tv,6.8,3.9,.3,0x10151c,0,0,0,.25);
+cube(tv,6.64,3.74,.12,0x343d47,0,0,.18,.3);
+const screen=new THREE.Mesh(new THREE.PlaneGeometry(6.4,3.5),new THREE.MeshBasicMaterial({color:0xffffff}));screen.position.set(0,0,.26);tv.add(screen);
+cube(tv,.65,.4,.24,0x303944,0,-2.12,-.03,.4);cube(tv,1.8,.1,.75,0x252d36,0,-2.36,.04,.35);
+const brand=cube(tv,.42,.025,.015,0x9baab5,0,-1.88,.25,.3);
+// 3D first-person remote + hand
+const rig=new THREE.Group();rig.position.set(3.3,1.0,3.1);rig.rotation.set(-.1,-.25,-.15);world.add(rig);
+const skin=M(0xc58b6c,.85),shirt=M(0x293d59,.8),remoteMat=M(0x171c24,.28,.25);
+let arm=mesh(new THREE.CapsuleGeometry(.19,.78,5,12),skin,rig,-.3,-.22,0);arm.rotation.z=-.55;
+let cuff=mesh(new THREE.CylinderGeometry(.2,.22,.22,16),shirt,rig,-.53,-.44,0);cuff.rotation.z=-.55;
+mesh(new THREE.SphereGeometry(.25,16,12),skin,rig,.04,.22,.03).scale.set(1,.85,.8);
+for(let i=0;i<4;i++){let f=mesh(new THREE.CapsuleGeometry(.055,.22,4,8),skin,rig,-.14+i*.12,.43,.04);f.rotation.z=-.18+i*.1}
+let th=mesh(new THREE.CapsuleGeometry(.065,.19,4,8),skin,rig,.27,.2,.04);th.rotation.z=1;
+const remote=new THREE.Group();remote.position.set(.03,.48,.15);remote.rotation.z=-.12;rig.add(remote);
+mesh(new THREE.BoxGeometry(.46,1.05,.12),remoteMat,remote,0,.12,0);
+mesh(new THREE.SphereGeometry(.03,10,8),M(0x8beaff,.2),remote,0,.61,.07);
+for(let r=0;r<4;r++)for(let c=0;c<3;c++){let b=mesh(new THREE.CylinderGeometry(.045,.05,.025,12),M(r===0&&c===1?0xe54c59:0x69737e,.35),remote,(c-1)*.12,.36-r*.16,.075);b.rotation.x=Math.PI/2}
+
+// Independent 3D programme render target
+const broadcast=new THREE.Scene();broadcast.background=new THREE.Color(0x283e63);
+broadcast.add(new THREE.HemisphereLight(0xffffff,0x58657a,2.1));
+const studioLight=new THREE.DirectionalLight(0xffffff,2.5);studioLight.position.set(-3,7,5);studioLight.castShadow=true;broadcast.add(studioLight);
+const rim=new THREE.PointLight(0xffb1cb,18,15);rim.position.set(3,3,2);broadcast.add(rim);
+const bcam=new THREE.PerspectiveCamera(42,6.4/3.5,.1,100);
+const rt=new THREE.WebGLRenderTarget(1280,700,{minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter});
+screen.material=new THREE.MeshBasicMaterial({map:rt.texture,toneMapped:false});
+const bground=mesh(new THREE.PlaneGeometry(40,40),M(0x303b54),broadcast,0,-.04,0);bground.rotation.x=-Math.PI/2;bground.receiveShadow=true;
+let set=new THREE.Group();broadcast.add(set);
+let actors=[],decor=[],channel=0,paused=false,clock=new THREE.Clock(),elapsed=0,eventTimer=0,lastSpeaker=-1,captionTimer=0,camTimer=0;
+let logs=[];
+const channels=[
+ {name:'미션 예능',sub:'LIVE VARIETY',bg:0x263c60,stage:0x30394d,cast:['장난꾸러기','승부욕 강함','허당'],colors:[0xe5b13c,0x3c83b7,0xb64e68]},
+ {name:'일본 예능',sub:'JAPANESE VARIETY',bg:0x75452d,stage:0x8d573a,cast:['과장된 리액션','진지한 척','엉뚱함'],colors:[0x26364d,0xe6e1d6,0xb93c3c]},
+ {name:'홈쇼핑',sub:'HOME SHOPPING',bg:0xdce9ee,stage:0xe8eff2,cast:['열정적인 진행자','의심 많은 게스트','보조 진행자'],colors:[0x2d8caa,0xd65b63,0x5caa78]},
+ {name:'개그 프로그램',sub:'COMEDY SKETCH',bg:0x713d3b,stage:0x934c43,cast:['능청스러움','잘 속음','무표정'],colors:[0x2c3548,0xf0e8dc,0x9c4d3d]},
+ {name:'토크쇼',sub:'TALK SHOW',bg:0x233653,stage:0x343e59,cast:['말이 많음','차분한 분석가','리액션 담당'],colors:[0x315b86,0x784c5b,0x9b7849]},
+ {name:'버라이어티',sub:'STAR VARIETY',bg:0x4d3970,stage:0x5c447f,cast:['경쟁심 강함','분위기 메이커','전략가'],colors:[0xe3a83b,0x3f8dbb,0x66a47c]},
+ {name:'연애 리얼리티',sub:'LOVE REALITY',bg:0x8d6276,stage:0x9b7587,cast:['낯가림','솔직함','눈치 빠름'],colors:[0xf0e4df,0x43556d,0x9e596f]},
+ {name:'드라마',sub:'LIVE DRAMA',bg:0x364451,stage:0x46535f,cast:['감정적인 인물','비밀을 숨김','냉정함'],colors:[0xe8e0d6,0x39485c,0x704c4d]},
+ {name:'광고',sub:'COMMERCIAL',bg:0xd9b95e,stage:0xe9cf7b,cast:['밝은 모델','까다로운 고객','내레이션 담당'],colors:[0x3d7197,0xf0e5d2,0x5e9c7c]}
+];
+const lines=[
+ ['야, 그거 네가 한 거잖아!','잠깐만, 내 말 좀 들어봐.','아니 지금 그게 중요해?','하하하! 진짜 어이없네.','이거 생각보다 재밌는데?'],
+ ['ええっ!? 진짜라고!?','잠깐, 이건 예상 못 했어.','왜 다들 나만 보는 거야?','하하! 대박인데?'],
+ ['지금 보시는 제품, 정말 놀랍죠!','잠깐만요, 이건 직접 확인해봐야죠.','어? 이 기능은 처음 보는데요?','고객님, 바로 이 부분입니다!'],
+ ['아니 그걸 그렇게 받아들이면 어떡해!','잠깐… 지금 나 놀리는 거야?','표정 관리 좀 해봐.','아무 일도 없었습니다.'],
+ ['그때 제가 정말 놀랐거든요.','잠깐, 그 얘기는 처음 듣는데요?','그러니까 제 말은…','그건 조금 다른 문제인 것 같아요.'],
+ ['이번엔 내가 이길 거야!','작전이 있어. 잘 들어봐.','그걸 작전이라고 세운 거야?','아 진짜 억울하네!'],
+ ['아까부터 하고 싶었던 말이 있어요.','어… 지금요?','그냥 조금 궁금했어요.','아니, 그런 뜻은 아니었어요.'],
+ ['왜 나한테 말하지 않았어?','그건 네가 생각하는 그런 게 아니야.','이제 와서 설명하겠다고?','잠깐만, 내 말도 들어줘.'],
+ ['이 제품 하나면 충분합니다!','정말 이렇게 간단하다고요?','네, 직접 보여드릴게요!','와, 이건 꽤 괜찮은데요?']
+];
+const captions=document.querySelector('#caption'),speakerEl=document.querySelector('#speaker'),wordsEl=document.querySelector('#words');
+const logEl=document.querySelector('#loglines');
+function log(s){logs.unshift(s);logs=logs.slice(0,4);logEl.innerHTML=logs.map(x=>'• '+x).join('<br>')}
+function caption(name,txt){speakerEl.textContent=name;wordsEl.textContent=txt;captions.classList.add('show');captionTimer=3.1}
+function rand(a){return a[Math.floor(Math.random()*a.length)]}
+function clearSet(){while(set.children.length){let o=set.children[0];set.remove(o);o.traverse(n=>{if(n.geometry)n.geometry.dispose();if(n.material){if(Array.isArray(n.material))n.material.forEach(m=>m.dispose());else n.material.dispose()}})}actors=[];decor=[]}
+function makeActor(index,x,shirtColor,role){
+ const root=new THREE.Group();root.position.set(x,0,.15);set.add(root);
+ const torso=mesh(new THREE.CapsuleGeometry(.29,.62,5,14),M(shirtColor,.8),root,0,1.02,0);
+ const neck=mesh(new THREE.CylinderGeometry(.075,.09,.15,12),skin,root,0,1.48,0);
+ const head=new THREE.Group();head.position.y=1.72;root.add(head);
+ mesh(new THREE.SphereGeometry(.235,20,16),M([0xe8b99b,0xc98e70,0xf0c9a8][index%3],.8),head,0,0,0);
+ mesh(new THREE.SphereGeometry(.24,18,12,0,Math.PI*2,0,Math.PI*.52),M([0x211c1b,0x3b2922,0x161a22][index%3]),head,0,.06,-.015);
+ for(let s of [-1,1]){mesh(new THREE.SphereGeometry(.025,8,8),M(0x151515),head,s*.082,.015,.218)}
+ const mouth=mesh(new THREE.SphereGeometry(.025,8,6),M(0x6f3434),head,0,-.075,.22);mouth.scale.set(1,.45,.4);
+ const arms=[];
+ for(let s of [-1,1]){let a=mesh(new THREE.CapsuleGeometry(.085,.48,4,10),M(shirtColor,.8),root,s*.38,1.04,0);a.rotation.z=-s*.1;arms.push(a)}
+ const legs=[];
+ for(let s of [-1,1]){let l=mesh(new THREE.CapsuleGeometry(.095,.56,4,10),M(0x252c39,.85),root,s*.14,.36,0);legs.push(l)}
+ // simple shoe geometry
+ for(let s of [-1,1])mesh(new THREE.BoxGeometry(.2,.12,.34),M(0x171b22),root,s*.14,.08,.08);
+ const actor={id:index,name:['민수','지연','태호'][index],role,root,head,torso,arms,legs,mouth,emotion:'중립',mood:0,energy:.5,confidence:.5,goal:['관심을 받고 싶다','분위기를 편하게 만들고 싶다','자기 의견을 인정받고 싶다'][index],memory:[],target:null,think:1+Math.random()*2,act:0,gesture:0,walk:0,phase:Math.random()*6,voice:0};
+ actors.push(actor);return actor;
+}
+function addLabel(text,color){let c=document.createElement('canvas');c.width=1024;c.height=180;let ctx=c.getContext('2d');ctx.fillStyle='#111a2b';ctx.fillRect(0,0,1024,180);ctx.fillStyle='#fff';ctx.font='bold 76px sans-serif';ctx.textAlign='center';ctx.fillText(text,512,120);let tex=new THREE.CanvasTexture(c);let plane=mesh(new THREE.PlaneGeometry(4.9,.72),new THREE.MeshBasicMaterial({map:tex}),set,0,2.75,-1.5);decor.push(plane)}
+function buildChannel(){
+ clearSet();let cfg=channels[channel];broadcast.background=new THREE.Color(cfg.bg);bground.material.color.setHex(cfg.stage);
+ addLabel(cfg.name);
+ // stage-specific geometry
+ if(channel===0||channel===5){cube(set,7,.14,1.1,0xf0eee6,0,.92,-.15);for(let i=0;i<5;i++)cube(set,.7,.12,.5,[0xe9bb42,0x4287b4,0xc65b70][i%3],-2.3+i*1.15,.15,-.4)}
+ if(channel===1){cube(set,7,2.8,.12,0xc66b38,0,1.5,-2);for(let i=0;i<5;i++)cube(set,.12,2.7,.12,0xf5e4c9,-2.7+i*1.35,1.5,-1.9)}
+ if(channel===2){cube(set,2.8,2.3,.15,0xf9fafb,1.55,1.45,-.8);let product=mesh(new THREE.TorusKnotGeometry(.48,.16,90,14),M(0x66bad4,.22,.2),set,1.55,1.35,.1);decor.push(product);cube(set,7,.1,1,0xf2f2f2,0,.7,-.2)}
+ if(channel===3){cube(set,7,2.8,.12,0x8f4c43,0,1.5,-2);cube(set,.9,.9,.8,0x96583c,0,.5,-.2)}
+ if(channel===4){cube(set,6,.12,1.5,0x433b42,0,.72,-.2);for(let x of [-1.3,1.3])mesh(new THREE.CylinderGeometry(.45,.45,.55,20),M(0x945066),set,x,.4,-.15)}
+ if(channel===6){for(let x of [-2.2,2.2]){mesh(new THREE.SphereGeometry(.75,16,12),M(0x679778),set,x,2,-1.8);cube(set,.13,1.2,.13,0x604934,x,1.1,-1.8)}cube(set,2,.14,.5,0x704d40,0,.55,.1)}
+ if(channel===7){cube(set,7,3,.12,0x5e6a75,0,1.5,-2);cube(set,.12,3,.18,0xd4d7d9,-2,1.5,-1.8);cube(set,.12,3,.18,0xd4d7d9,2,1.5,-1.8)}
+ if(channel===8){let product=mesh(new THREE.IcosahedronGeometry(.85,2),M(0xff6484,.2,.2),set,1.3,1.45,0);decor.push(product);cube(set,6,.16,.7,0x252c39,0,.15,-.2)}
+ let xs=channel===0?[-2.0,0,2.0]:[-1.75,0,1.75];
+ actors.forEach(()=>{});for(let i=0;i<3;i++)makeActor(i,xs[i],cfg.colors[i],cfg.cast[i]);
+ if(channel===0){cube(set,7,.12,1.2,0xf5f2ea,0,.95,-.1)}
+ if(channel===4||channel===6){actors[0].root.position.x=-1.25;actors[1].root.position.x=1.25;actors[2].root.position.x=2.45;actors[2].root.scale.setScalar(.78)}
+ if(channel===7){actors[0].root.position.x=-.65;actors[1].root.position.x=.65;actors[2].root.position.x=2.3}
+ bcam.position.set(0,2.5,9.5);bcam.lookAt(0,1.5,0);
+ elapsed=0;camTimer=5;eventTimer=2;logs=[];log('새로운 방송이 시작됐습니다.');log('출연자들이 서로를 살피고 있습니다.');
+ document.querySelector('#ch').textContent='CH '+String(channel+1).padStart(2,'0');document.querySelector('#genre').textContent=cfg.sub;
+ document.querySelector('#status').textContent='● LIVE · '+cfg.name+' · 자율 상호작용';
+}
+buildChannel();
+
+function remember(a,b,what){a.memory.push({who:b.name,what,time:elapsed});if(a.memory.length>8)a.memory.shift()}
+function setEmotion(a,e,amount=.6){a.emotion=e;a.mood=Math.max(-1,Math.min(1,a.mood+amount))}
+function react(a,b,kind){
+ if(kind==='joke'){setEmotion(a,Math.random()<.65?'웃음':'당황',.45);a.energy=Math.min(1,a.energy+.2)}
+ else if(kind==='challenge'){setEmotion(a,'승부욕',.55);a.confidence=Math.min(1,a.confidence+.2)}
+ else if(kind==='tease'){setEmotion(a,Math.random()<.55?'짜증':'웃음',-.25);a.target=b}
+ else if(kind==='support'){setEmotion(a,'안도',.3);a.energy=Math.min(1,a.energy+.1)}
+ remember(a,b,kind);
+}
+function chooseAction(a){
+ const others=actors.filter(x=>x!==a);let b=rand(others),r=Math.random();
+ let cfg=channels[channel];
+ let act;
+ if(channel===0||channel===5){act=r<.28?'tease':r<.55?'challenge':r<.8?'joke':'comment'}
+ else if(channel===1||channel===3){act=r<.42?'joke':r<.72?'tease':'comment'}
+ else if(channel===2||channel===8){act=r<.5?'present':r<.75?'question':'comment'}
+ else if(channel===4){act=r<.55?'question':r<.8?'support':'comment'}
+ else if(channel===6){act=r<.42?'question':r<.75?'support':'comment'}
+ else {act=r<.4?'confront':r<.7?'question':'comment'}
+ if(a.mood<-.4&&Math.random()<.5)act='confront';
+ if(a.energy<.2)act='quiet';
+ return {act,b};
+}
+function perform(a,act,b){
+ a.target=b;a.act=1.8+Math.random()*1.4;a.gesture=1;a.voice=1.1;a.energy=Math.max(.08,a.energy-.08);
+ let lineset=lines[channel],text=rand(lineset),kind='comment';
+ if(act==='tease'){text=channel===6?'아까부터 왜 그렇게 조용해요?':rand(['야, 너 아까 실수한 거 봤어.','그걸 진짜 믿은 거야?','너 지금 표정 완전 웃겨.']);kind='tease';react(b,a,'tease');}
+ if(act==='challenge'){text=rand(['이번엔 내가 이길 거야!','그렇게 자신 있어? 한번 해보자.','좋아, 승부 보자고.']);kind='challenge';react(b,a,'challenge')}
+ if(act==='joke'){text=rand(['아니, 그게 말이 돼? 하하!','잠깐만, 나 지금 진지해.','이 상황 자체가 너무 웃기잖아.']);kind='joke';react(b,a,'joke')}
+ if(act==='question'){text=rand(['너는 어떻게 생각해?','아까 그 말, 무슨 뜻이야?','솔직히 말해봐.']);b.target=a;setEmotion(b,'생각 중',.1);remember(b,a,'질문을 받음')}
+ if(act==='support'){text=rand(['괜찮아, 천천히 말해.','나는 네 말 이해해.','그럴 수도 있지.']);react(b,a,'support')}
+ if(act==='present')text=rand(['지금 이 부분을 주목해주세요!','직접 한번 보여드릴게요.','이건 정말 특별한데요?']);
+ if(act==='confront'){text=rand(['아니, 그건 좀 아니지.','왜 내 말은 안 듣는 건데?','잠깐, 그 얘기는 다르잖아.']);setEmotion(b,'당황',-.3);remember(b,a,'말다툼')}
+ if(act==='quiet')text='음… 잠깐 생각 좀 해볼게.';
+ if(act==='comment')text=rand(lineset);
+ caption(a.name,text);lastSpeaker=a.id;log(a.name+' → '+b.name+'에게 '+({tease:'장난',challenge:'도전',joke:'농담',question:'질문',support:'공감',present:'상품 소개',confront:'반박',quiet:'잠시 침묵',comment:'이야기'}[act]||'이야기'));
+ a.mood=Math.max(-1,Math.min(1,a.mood+(act==='joke'?.12:act==='confront'?-.2:.04)));
+}
+function surprise(){
+ let a=rand(actors),b=rand(actors.filter(x=>x!==a));
+ const events=[
+ ()=>{setEmotion(a,'깜짝 놀람',.5);caption(a.name,'어어!? 갑자기 뭐야!');log('갑작스러운 소리에 모두가 놀랐습니다.')},
+ ()=>{setEmotion(b,'웃음',.5);caption(b.name,'하하하! 진짜 웃기다.');react(a,b,'joke');log(b.name+'이 크게 웃기 시작했습니다.')},
+ ()=>{setEmotion(a,'짜증',-.55);caption(a.name,'아니, 잠깐만! 그건 아니잖아.');log('출연자 사이에 작은 신경전이 생겼습니다.')},
+ ()=>{setEmotion(a,'당황',-.2);caption(a.name,'어… 나한테 물어본 거야?');log(a.name+'이 갑자기 지목당했습니다.')},
+ ()=>{setEmotion(b,'호기심',.3);caption(b.name,'저거 뭐야? 한번 보여줘!');log('출연자들이 새로운 소품에 관심을 보입니다.')}
+ ];rand(events)();a.gesture=1.3;b.gesture=.8;a.target=b;
+}
+function updateActor(a,dt){
+ a.think-=dt;a.act=Math.max(0,a.act-dt);a.gesture=Math.max(0,a.gesture-dt);a.voice=Math.max(0,a.voice-dt);
+ a.energy=Math.min(1,a.energy+dt*.012);a.mood*=Math.pow(.985,dt*60);
+ a.phase+=dt;
+ let root=a.root;
+ root.position.y=.025*Math.sin(elapsed*2+a.phase);
+ root.rotation.y=.06*Math.sin(elapsed*1.1+a.phase);
+ a.head.rotation.y=a.target?THREE.MathUtils.damp(a.head.rotation.y,Math.sign(a.target.root.position.x-root.position.x)*.24,3,dt):THREE.MathUtils.damp(a.head.rotation.y,0,2,dt);
+ a.head.rotation.x=THREE.MathUtils.damp(a.head.rotation.x,a.voice>0?-.08:0,5,dt);
+ let gestureAmp=a.gesture>0?Math.sin((1.8-a.gesture)*9)*.65:0;
+ a.arms[0].rotation.z=THREE.MathUtils.damp(a.arms[0].rotation.z,-.12-gestureAmp*.65,5,dt);
+ a.arms[1].rotation.z=THREE.MathUtils.damp(a.arms[1].rotation.z,.12+gestureAmp,5,dt);
+ a.torso.rotation.z=THREE.MathUtils.damp(a.torso.rotation.z,a.act>0?Math.sin(elapsed*5+a.phase)*.07:0,3,dt);
+ a.mouth.scale.y=a.voice>0?.8+.7*Math.abs(Math.sin(elapsed*18+a.phase)):.45;
+ a.legs.forEach((l,i)=>{l.rotation.x=a.act>0&&a.emotion==='승부욕'?Math.sin(elapsed*9+i)*.18:0});
+ if(a.think<=0&&a.act<=0){
+   a.think=1.5+Math.random()*3.8;
+   if(Math.random()<.78){let {act,b}=chooseAction(a);perform(a,act,b)}
+ }
+}
+function updateCamera(dt){
+ camTimer-=dt;if(camTimer<=0){camTimer=3.5+Math.random()*5;
+ let mode=Math.random();
+ if(mode<.35){let a=rand(actors);bcam.position.set(a.root.position.x+(Math.random()-.5)*.45,2.2,5.4);bcam.lookAt(a.root.position.x,1.45,0)}
+ else if(mode<.65){let a=rand(actors),b=a.target||rand(actors.filter(x=>x!==a));let mid=(a.root.position.x+b.root.position.x)/2;bcam.position.set(mid,2.25,7.2);bcam.lookAt(mid,1.45,0)}
+ else{bcam.position.set((Math.random()-.5)*.8,2.8,9.5);bcam.lookAt(0,1.5,0)}
+ }}
+function frame(){
+ requestAnimationFrame(frame);let dt=Math.min(clock.getDelta(),.05);
+ if(!paused){elapsed+=dt;eventTimer-=dt;actors.forEach(a=>updateActor(a,dt));decor.forEach(o=>{if(o.geometry.type==='TorusKnotGeometry'||o.geometry.type==='IcosahedronGeometry'){o.rotation.x+=dt*.4;o.rotation.y+=dt*.65}});updateCamera(dt);
+ if(eventTimer<=0){eventTimer=9+Math.random()*12;if(Math.random()<.36)surprise()}
+ if(captionTimer>0){captionTimer-=dt;if(captionTimer<=0)captions.classList.remove('show')}
+ rig.position.y=1+.025*Math.sin(elapsed*1.7);
+ }
+ renderer.setRenderTarget(rt);renderer.render(broadcast,bcam);renderer.setRenderTarget(null);renderer.render(world,camera);
+}
+frame();
+function change(d){channel=(channel+d+channels.length)%channels.length;buildChannel()}
+document.querySelector('#prev').onclick=()=>change(-1);document.querySelector('#next').onclick=()=>change(1);
+document.querySelector('#event').onclick=()=>surprise();
+document.querySelector('#pause').onclick=e=>{paused=!paused;e.currentTarget.textContent=paused?'▶ 재개':'Ⅱ 일시정지';document.querySelector('#status').textContent=paused?'Ⅱ 방송 일시정지':'● LIVE · '+channels[channel].name+' · 자율 상호작용'};
+canvas.addEventListener('pointerup',e=>{if(e.clientY<innerHeight*.78&&e.clientX<innerWidth*.75)surprise()});
+window.addEventListener('keydown',e=>{if(e.key==='ArrowRight')change(1);if(e.key==='ArrowLeft')change(-1);if(e.key===' ')surprise()});
+window.addEventListener('resize',()=>{renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix()});
+</script>
+</body></html>
