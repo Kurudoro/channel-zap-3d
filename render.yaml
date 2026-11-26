@@ -1,0 +1,8 @@
+services:
+  - type: web
+    name: channel-zap-3d
+    runtime: static
+    buildCommand: echo "No build step required"
+    staticPublishPath: .
+    branch: main
+    autoDeployTrigger: commit
