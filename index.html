@@ -115,12 +115,13 @@ const captions=document.querySelector('#caption'),speakerEl=document.querySelect
 const logEl=document.querySelector('#loglines');
 function log(s){logs.unshift(s);logs=logs.slice(0,4);logEl.innerHTML=logs.map(x=>'• '+x).join('<br>')}
 function caption(name,txt){speakerEl.textContent=name;wordsEl.textContent=txt;captions.classList.add('show');captionTimer=3.1}
+const API_BASE='https://channel-zap-3d-api.onrender.com';
 let aiReady=false, speechSeq=0;
-async function checkAI(){try{const r=await fetch('/api/health');const j=await r.json();aiReady=!!j.apiConfigured;document.querySelector('#status').textContent=aiReady?'● AI LIVE · 출연자 자율 대화':'● LIVE · AI 서버 준비 중';}catch(e){aiReady=false}}
+async function checkAI(){try{const r=await fetch(API_BASE+'/api/health');const j=await r.json();aiReady=!!j.apiConfigured;document.querySelector('#status').textContent=aiReady?'● AI LIVE · 출연자 자율 대화':'● LIVE · AI 서버 준비 중';}catch(e){aiReady=false}}
 checkAI();
 async function askAI(a,b,act,fallback,seq,channelAtStart){
  try{
-  const r=await fetch('/api/dialogue',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+  const r=await fetch(API_BASE+'/api/dialogue',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
    channel:channels[channelAtStart].name,program:channels[channelAtStart].sub,
    actor:{name:a.name,role:a.role,goal:a.goal,mood:a.emotion,energy:a.energy},
    partner:{name:b.name,role:b.role,mood:b.emotion},
