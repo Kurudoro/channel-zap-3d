@@ -6,6 +6,7 @@ const ROOT = process.cwd();
 const PORT = Number(process.env.PORT || 3000);
 const API_KEY = process.env.OPENAI_API_KEY || "";
 const MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "https://channel-zap-3d.onrender.com";
 const mime = {
   ".html":"text/html; charset=utf-8", ".js":"text/javascript; charset=utf-8",
   ".css":"text/css; charset=utf-8", ".json":"application/json; charset=utf-8",
@@ -16,6 +17,14 @@ const hits = new Map();
 function send(res,status,data){res.writeHead(status,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store"});res.end(JSON.stringify(data));}
 function limited(ip){const now=Date.now(),old=hits.get(ip)||{start:now,count:0};if(now-old.start>60000){old.start=now;old.count=0;}old.count++;hits.set(ip,old);return old.count>12;}
 const server=http.createServer(async(req,res)=>{
+  const origin=req.headers.origin;
+  if(origin===ALLOWED_ORIGIN){
+    res.setHeader("Access-Control-Allow-Origin",ALLOWED_ORIGIN);
+    res.setHeader("Access-Control-Allow-Methods","GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers","Content-Type");
+    res.setHeader("Vary","Origin");
+  }
+  if(req.method==="OPTIONS"){res.writeHead(origin===ALLOWED_ORIGIN?204:403);return res.end();}
   const url=new URL(req.url,"http://localhost");
   if(req.method==="GET"&&url.pathname==="/api/health")return send(res,200,{ok:true,apiConfigured:Boolean(API_KEY),model:MODEL});
   if(req.method==="POST"&&url.pathname==="/api/dialogue"){
