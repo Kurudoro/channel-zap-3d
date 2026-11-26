@@ -1,8 +1,9 @@
 services:
   - type: web
     name: channel-zap-3d
-    runtime: static
-    buildCommand: echo "No build step required"
-    staticPublishPath: .
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
     branch: main
     autoDeployTrigger: commit
